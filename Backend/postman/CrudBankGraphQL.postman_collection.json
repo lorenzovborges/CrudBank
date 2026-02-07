@@ -1,0 +1,220 @@
+{
+  "info": {
+    "name": "CrudBank GraphQL (Public API)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Public GraphQL collection for account, transfer, and balance flows."
+  },
+  "item": [
+    {
+      "name": "Create Account A",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "const id = json?.data?.createAccount?.id;",
+              "if (id) pm.collectionVariables.set('fromAccountId', id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/graphql",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "graphql"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation CreateAccount($input: CreateAccountInput!) { createAccount(input: $input) { id ownerName branch number currentBalance status } }\",\n  \"variables\": {\n    \"input\": {\n      \"ownerName\": \"Alice\",\n      \"document\": \"12345678901\",\n      \"branch\": \"0001\",\n      \"number\": \"12345-1\",\n      \"initialBalance\": \"1000.00\"\n    }\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Create Account B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "const id = json?.data?.createAccount?.id;",
+              "if (id) pm.collectionVariables.set('toAccountId', id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/graphql",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "graphql"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation CreateAccount($input: CreateAccountInput!) { createAccount(input: $input) { id ownerName branch number currentBalance status } }\",\n  \"variables\": {\n    \"input\": {\n      \"ownerName\": \"Bob\",\n      \"document\": \"10987654321\",\n      \"branch\": \"0001\",\n      \"number\": \"12345-2\",\n      \"initialBalance\": \"500.00\"\n    }\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Transfer Funds",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "const id = json?.data?.transferFunds?.transaction?.id;",
+              "if (id) pm.collectionVariables.set('transactionId', id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/graphql",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "graphql"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"mutation Transfer($input: TransferFundsInput!) { transferFunds(input: $input) { idempotentReplay fromAccountBalance toAccountBalance transaction { id fromAccountId toAccountId amount description createdAt } } }\",\n  \"variables\": {\n    \"input\": {\n      \"fromAccountId\": \"{{fromAccountId}}\",\n      \"toAccountId\": \"{{toAccountId}}\",\n      \"amount\": \"120.00\",\n      \"description\": \"Sample transfer\",\n      \"idempotencyKey\": \"{{idempotencyKey}}\"\n    }\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Available Balance (Source)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/graphql",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "graphql"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query Balance($accountId: ID!) { availableBalance(accountId: $accountId) }\",\n  \"variables\": {\n    \"accountId\": \"{{fromAccountId}}\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "List Accounts (Relay)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/graphql",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "graphql"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query Accounts($first: Int!, $after: String, $status: AccountStatus) { accounts(first: $first, after: $after, status: $status) { edges { cursor node { id ownerName currentBalance status } } pageInfo { hasNextPage endCursor } } }\",\n  \"variables\": {\n    \"first\": 10,\n    \"after\": null,\n    \"status\": \"ACTIVE\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Transactions By Account (SENT)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/graphql",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "graphql"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"query Transactions($accountId: ID!, $direction: TransactionDirection!, $first: Int!, $after: String) { transactionsByAccount(accountId: $accountId, direction: $direction, first: $first, after: $after) { edges { cursor node { id fromAccountId toAccountId amount description createdAt } } pageInfo { hasNextPage endCursor } } }\",\n  \"variables\": {\n    \"accountId\": \"{{fromAccountId}}\",\n    \"direction\": \"SENT\",\n    \"first\": 10,\n    \"after\": null\n  }\n}"
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "fromAccountId",
+      "value": ""
+    },
+    {
+      "key": "toAccountId",
+      "value": ""
+    },
+    {
+      "key": "transactionId",
+      "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "idem-postman-1"
+    }
+  ]
+}

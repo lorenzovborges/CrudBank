@@ -1,0 +1,32 @@
+package com.woovi.crudbank.shared.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
+
+import java.util.Arrays;
+import java.util.List;
+
+@Configuration
+public class WebConfig {
+
+    @Bean
+    CorsFilter corsFilter(CorsProperties corsProperties) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        List<String> allowedOriginPatterns = Arrays.stream(corsProperties.allowedOrigins().split(","))
+            .map(String::trim)
+            .filter(value -> !value.isBlank())
+            .toList();
+        configuration.setAllowedOriginPatterns(allowedOriginPatterns);
+        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return new CorsFilter(source);
+    }
+}
