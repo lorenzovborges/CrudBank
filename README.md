@@ -1,4 +1,4 @@
-# CrudBank - Woovi Challenge (GraphQL Relay)
+# CrudBank - Challenge (GraphQL Relay)
 
 This repository is a fullstack implementation of the **Woovi Challenge - Crud Bank GraphQL Relay**.
 
