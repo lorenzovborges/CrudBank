@@ -1,15 +1,6 @@
-# CrudBank Backend JS (GraphQL Relay)
+# CrudBank Backend (GraphQL Relay)
 
 Node.js + Koa + GraphQL backend for CrudBank with Relay global IDs/connections, MongoDB transactions, idempotent transfers, and per-account rate limiting.
-
-## Two Backend Versions
-
-This repository has two interchangeable backends:
-
-- Java: `/Users/lorenzoviaroborges/woovi/crudbank/backend-java`
-- JS: `/Users/lorenzoviaroborges/woovi/crudbank/backend-js` (this folder)
-
-Both expose the same GraphQL contract for the frontend.
 
 ## Stack
 
@@ -22,13 +13,13 @@ Both expose the same GraphQL contract for the frontend.
 ## Run Locally
 
 ```bash
-cd backend-js
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend
 cp .env.example .env
 npm ci
 npm run dev
 ```
 
-Endpoints (default):
+Default endpoints:
 
 - GraphQL: `http://localhost:8080/graphql`
 - GraphiQL: `http://localhost:8080/graphiql`
@@ -37,15 +28,15 @@ Endpoints (default):
 ## Docker
 
 ```bash
-cd backend-js
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend
 cp .env.example .env
 docker compose up --build -d
 ```
 
-Custom host port while keeping container internals stable on `8080`:
+Custom host port while keeping container internals on `8080`:
 
 ```bash
-cd backend-js
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend
 APP_PORT=18080 MONGO_PORT=37017 docker compose up --build -d
 ```
 
@@ -53,24 +44,6 @@ Then:
 
 - GraphQL: `http://localhost:18080/graphql`
 - GraphiQL: `http://localhost:18080/graphiql`
-
-## Backend Replacement with Java Version
-
-`backend-js` is designed to replace `backend-java` transparently for frontend usage.
-
-- Keep GraphQL contract unchanged.
-- Switch only frontend endpoint (`VITE_GRAPHQL_URL`) between Java and JS backends.
-
-1:1 replacement (one backend running at a time):
-
-- Java: `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
-- JS: `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
-
-Parallel run (both running):
-
-- Keep Java at `8080`
-- Run JS at `18080` using `APP_PORT=18080`
-- Point frontend to `http://localhost:18080/graphql` when testing JS
 
 ## Environment Variables
 
@@ -95,17 +68,15 @@ Parallel run (both running):
 - `npm run test`
 - `npm run test:coverage`
 - `npm run test:smoke`
-- `npm run test:parity`
 - `npm run verify`
 
-## Parity and Compatibility
+## Compatibility
 
-- Schema byte parity test against `backend-java` SDL.
-- Frontend GraphQL operations smoke tests.
-- Runtime parity script comparing Java vs JS GraphQL behavior.
+- Frontend GraphQL operations smoke tests remain in the backend test suite.
+- GraphQL contract stays stable for `VITE_GRAPHQL_URL=http://localhost:8080/graphql`.
 
 ## Postman
 
 Collection file:
 
-- `backend-js/postman/CrudBankGraphQL.postman_collection.json`
+- `/Users/lorenzoviaroborges/woovi/crudbank/backend/postman/CrudBankGraphQL.postman_collection.json`

@@ -1,5 +1,5 @@
 {
-  "name": "crudbank-backend-js",
+  "name": "crudbank-backend",
   "version": "1.0.0",
   "private": true,
   "description": "Woovi Challenge - Crud Bank GraphQL Relay backend in Node.js/Koa",
@@ -12,8 +12,7 @@
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
     "test:smoke": "jest --runInBand tests/integration/idempotencyConcurrency.integration.test.ts tests/integration/rateLimit.integration.test.ts tests/integration/performanceSmoke.integration.test.ts",
-    "test:parity": "node ./scripts/parity/run-parity-check.mjs",
-    "verify": "npm run lint && npm run build && npm run test:coverage && npm run test:smoke && npm run test:parity",
+    "verify": "npm run lint && npm run build && npm run test:coverage && npm run test:smoke",
     "test:watch": "jest --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

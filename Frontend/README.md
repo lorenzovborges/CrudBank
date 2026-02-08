@@ -15,7 +15,7 @@ Frontend for the Crud Bank challenge built with React + Vite + Relay + React Rou
 ## Prerequisites
 
 - Node.js 20+ (recommended)
-- Backend GraphQL API running (default: `http://localhost:8080/graphql`)
+- Backend GraphQL API running from `/Users/lorenzoviaroborges/woovi/crudbank/backend` (default: `http://localhost:8080/graphql`)
 
 ## Setup
 
