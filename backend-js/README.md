@@ -2,6 +2,15 @@
 
 Node.js + Koa + GraphQL backend for CrudBank with Relay global IDs/connections, MongoDB transactions, idempotent transfers, and per-account rate limiting.
 
+## Two Backend Versions
+
+This repository has two interchangeable backends:
+
+- Java: `/Users/lorenzoviaroborges/woovi/crudbank/backend-java`
+- JS: `/Users/lorenzoviaroborges/woovi/crudbank/backend-js` (this folder)
+
+Both expose the same GraphQL contract for the frontend.
+
 ## Stack
 
 - Node.js 20+
@@ -51,6 +60,17 @@ Then:
 
 - Keep GraphQL contract unchanged.
 - Switch only frontend endpoint (`VITE_GRAPHQL_URL`) between Java and JS backends.
+
+1:1 replacement (one backend running at a time):
+
+- Java: `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
+- JS: `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
+
+Parallel run (both running):
+
+- Keep Java at `8080`
+- Run JS at `18080` using `APP_PORT=18080`
+- Point frontend to `http://localhost:18080/graphql` when testing JS
 
 ## Environment Variables
 

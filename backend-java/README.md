@@ -1,6 +1,15 @@
-# CrudBank Backend (GraphQL Relay)
+# CrudBank Backend Java (GraphQL Relay)
 
-Spring Boot backend for the Crud Bank challenge, using Java 21, MongoDB, GraphQL, Relay global IDs/connections, idempotent transfers, and per-account rate limiting.
+Spring Boot backend for the CrudBank challenge, using Java 21, MongoDB, GraphQL, Relay global IDs/connections, idempotent transfers, and per-account rate limiting.
+
+## Two Backend Versions
+
+This repository has two interchangeable backends:
+
+- Java: `/Users/lorenzoviaroborges/woovi/crudbank/backend-java` (this folder)
+- JS: `/Users/lorenzoviaroborges/woovi/crudbank/backend-js`
+
+Both expose the same GraphQL contract for the frontend.
 
 ## Stack
 
@@ -16,29 +25,36 @@ Spring Boot backend for the Crud Bank challenge, using Java 21, MongoDB, GraphQL
 Recommended (Docker):
 
 ```bash
-cd Backend
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend-java
+cp .env.example .env
 docker compose up --build -d
 ```
 
 Local JVM run:
 
 ```bash
-cd Backend
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend-java
+cp .env.example .env
 mvn spring-boot:run
 ```
 
-Endpoints:
+Default endpoints:
 
 - GraphQL: `http://localhost:8080/graphql`
 - GraphiQL: `http://localhost:8080/graphiql`
 - Health: `http://localhost:8080/actuator/health`
 
-## Environment
+## Port Strategy and Backend Replacement
 
-```bash
-cd Backend
-cp .env.example .env
-```
+For transparent frontend replacement, run only one backend at a time on port `8080`.
+
+- Java: `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
+- JS: `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
+
+If you want both running in parallel, assign a different host port to one backend.
+Example: keep Java on `8080` and run JS on `18080`.
+
+## Environment
 
 Main variables:
 
@@ -136,14 +152,14 @@ Codes used by the API:
 Run tests:
 
 ```bash
-cd Backend
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend-java
 mvn test
 ```
 
 Run full CI gate (tests + JaCoCo):
 
 ```bash
-cd Backend
+cd /Users/lorenzoviaroborges/woovi/crudbank/backend-java
 mvn clean verify
 ```
 
@@ -156,7 +172,7 @@ JaCoCo minimums are enforced in `pom.xml`:
 
 Collection path:
 
-- `Backend/postman/CrudBankGraphQL.postman_collection.json`
+- `/Users/lorenzoviaroborges/woovi/crudbank/backend-java/postman/CrudBankGraphQL.postman_collection.json`
 
 Suggested flow:
 
