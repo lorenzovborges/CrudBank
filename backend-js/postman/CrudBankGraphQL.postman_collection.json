@@ -39,7 +39,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"query\": \"mutation CreateAccount($input: CreateAccountInput!) { createAccount(input: $input) { id ownerName branch number currentBalance status } }\",\n  \"variables\": {\n    \"input\": {\n      \"ownerName\": \"Alice\",\n      \"document\": \"12345678901\",\n      \"branch\": \"0001\",\n      \"number\": \"12345-1\",\n      \"initialBalance\": \"1000.00\"\n    }\n  }\n}"
+              "raw": "{\n  \"query\": \"mutation CreateAccount($input: CreateAccountInput!) { createAccount(input: $input) { id ownerName branch number currentBalance status } }\",\n  \"variables\": {\n    \"input\": {\n      \"ownerName\": \"Alice\",\n      \"document\": \"52998224725\",\n      \"branch\": \"0001\",\n      \"number\": \"12345-1\",\n      \"initialBalance\": \"1000.00\"\n    }\n  }\n}"
         }
       }
     },
@@ -77,7 +77,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"query\": \"mutation CreateAccount($input: CreateAccountInput!) { createAccount(input: $input) { id ownerName branch number currentBalance status } }\",\n  \"variables\": {\n    \"input\": {\n      \"ownerName\": \"Bob\",\n      \"document\": \"10987654321\",\n      \"branch\": \"0001\",\n      \"number\": \"12345-2\",\n      \"initialBalance\": \"500.00\"\n    }\n  }\n}"
+              "raw": "{\n  \"query\": \"mutation CreateAccount($input: CreateAccountInput!) { createAccount(input: $input) { id ownerName branch number currentBalance status } }\",\n  \"variables\": {\n    \"input\": {\n      \"ownerName\": \"Bob\",\n      \"document\": \"39053344705\",\n      \"branch\": \"0001\",\n      \"number\": \"12345-2\",\n      \"initialBalance\": \"500.00\"\n    }\n  }\n}"
         }
       }
     },

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.DS_Store
+.git/
+.gitignore
+npm-debug.log*
+Dockerfile*
+docker-compose*.yml
+README.md
+tests/
+postman/
