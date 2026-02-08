@@ -43,16 +43,16 @@ export function TransactionsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>{direction === 'SENT' ? 'To Account' : 'From Account'}</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-center">Date</TableHead>
+              <TableHead className="text-center">{direction === 'SENT' ? 'To Account' : 'From Account'}</TableHead>
+              <TableHead className="text-center">Description</TableHead>
+              <TableHead className="text-center">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {transactions.map((tx) => (
               <TableRow key={tx.id}>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="text-center text-muted-foreground">
                   {new Date(tx.createdAt).toLocaleDateString('pt-BR', {
                     day: '2-digit',
                     month: '2-digit',
@@ -61,10 +61,10 @@ export function TransactionsTable({
                     minute: '2-digit',
                   })}
                 </TableCell>
-                <TableCell className="text-sm">{tx.counterpartyLabel}</TableCell>
-                <TableCell>{tx.description || 'Transfer'}</TableCell>
+                <TableCell className="text-center text-sm">{tx.counterpartyLabel}</TableCell>
+                <TableCell className="text-center">{tx.description || 'Transfer'}</TableCell>
                 <TableCell
-                  className={`text-right font-medium ${
+                  className={`text-center font-medium ${
                     direction === 'RECEIVED' ? 'text-green-600' : 'text-red-600'
                   }`}
                 >

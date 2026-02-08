@@ -82,33 +82,33 @@ export function AccountsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Owner</TableHead>
-            <TableHead>Document</TableHead>
-            <TableHead>Branch</TableHead>
-            <TableHead>Number</TableHead>
-            <TableHead className="text-right">Balance</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="text-center">Owner</TableHead>
+            <TableHead className="text-center">Document</TableHead>
+            <TableHead className="text-center">Branch</TableHead>
+            <TableHead className="text-center">Number</TableHead>
+            <TableHead className="text-center">Balance</TableHead>
+            <TableHead className="text-center">Status</TableHead>
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {accounts.map((account) => (
             <TableRow key={account.id}>
-              <TableCell className="font-medium">{account.ownerName}</TableCell>
-              <TableCell className="text-muted-foreground">
+              <TableCell className="text-center font-medium">{account.ownerName}</TableCell>
+              <TableCell className="text-center text-muted-foreground">
                 {maskDocument(account.document)}
               </TableCell>
-              <TableCell>{account.branch}</TableCell>
-              <TableCell>{account.number}</TableCell>
-              <TableCell className="text-right font-medium">
+              <TableCell className="text-center">{account.branch}</TableCell>
+              <TableCell className="text-center">{account.number}</TableCell>
+              <TableCell className="text-center font-medium">
                 {formatCurrency(account.currentBalance)}
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 <Badge variant={account.status === 'ACTIVE' ? 'default' : 'secondary'}>
                   {account.status}
                 </Badge>
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="size-8">

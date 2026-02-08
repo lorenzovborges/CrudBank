@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useLocation, useSearchParams } from 'react-router'
 import { fetchQuery, useLazyLoadQuery, useRelayEnvironment } from 'react-relay'
 import { TransactionsTable } from '@/components/transactions/TransactionsTable'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -99,13 +99,17 @@ function TransactionsList({
 }
 
 function TransactionsContent() {
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const preselectedAccountId = searchParams.get('accountId') || ''
 
   const accountsData = useLazyLoadQuery<AccountsQueryType>(
     AccountsQuery,
     { first: 100 },
-    { fetchPolicy: 'store-or-network' },
+    {
+      fetchPolicy: 'store-and-network',
+      fetchKey: `accounts-${location.key}`,
+    },
   )
 
   const allAccounts = accountsData.accounts.edges.map((edge) => edge.node)
@@ -129,6 +133,34 @@ function TransactionsContent() {
     return selectableAccounts.length > 0 ? selectableAccounts[0].id : ''
   })
   const [direction, setDirection] = useState<'SENT' | 'RECEIVED'>('SENT')
+
+  useEffect(() => {
+    if (selectableAccounts.length === 0) {
+      if (selectedAccountId !== '') {
+        setSelectedAccountId('')
+      }
+      return
+    }
+
+    const currentSelectionIsActive = selectableAccounts.some(
+      (account) => account.id === selectedAccountId,
+    )
+    if (currentSelectionIsActive) {
+      return
+    }
+
+    if (preselectedAccountId) {
+      const preselectedIsActive = selectableAccounts.some(
+        (account) => account.id === preselectedAccountId,
+      )
+      if (preselectedIsActive) {
+        setSelectedAccountId(preselectedAccountId)
+        return
+      }
+    }
+
+    setSelectedAccountId(selectableAccounts[0].id)
+  }, [selectableAccounts, selectedAccountId, preselectedAccountId])
 
   if (!selectedAccountId || selectableAccounts.length === 0) {
     return (

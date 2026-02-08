@@ -35,7 +35,7 @@ export function QuickActions({ onTransferClick, onNewAccountClick }: QuickAction
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3">
       {actions.map((item) => (
         <Card
           key={item.label}

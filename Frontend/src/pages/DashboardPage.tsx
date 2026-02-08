@@ -25,23 +25,24 @@ function DashboardContent() {
     (sum, account) => sum + parseFloat(account.currentBalance),
     0,
   )
-  const firstAccountId = accounts.length > 0 ? accounts[0].id : null
-  const ownerName = accounts.length > 0 ? accounts[0].ownerName : 'All Accounts'
-
+  const accountIds = accounts.map((account) => account.id)
   return (
     <div className="space-y-6">
-      <BalanceCard
-        totalBalance={totalBalance}
-        ownerName={ownerName}
-        accountCount={accounts.length}
-      />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <BalanceCard
+          totalBalance={totalBalance}
+          accountCount={accounts.length}
+        />
 
-      <QuickActions
-        onTransferClick={() => setTransferOpen(true)}
-        onNewAccountClick={() => setCreateAccountOpen(true)}
-      />
+        <div className="md:col-span-2">
+          <QuickActions
+            onTransferClick={() => setTransferOpen(true)}
+            onNewAccountClick={() => setCreateAccountOpen(true)}
+          />
+        </div>
+      </div>
 
-      {firstAccountId && <RecentTransactions accountId={firstAccountId} />}
+      <RecentTransactions accountIds={accountIds} refreshKey={refreshKey} />
 
       <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} onSuccess={() => setRefreshKey((k) => k + 1)} />
       <CreateAccountDialog
@@ -56,11 +57,13 @@ function DashboardContent() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <Skeleton className="h-36 w-full" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Skeleton className="h-28 w-full" />
+        <div className="grid grid-cols-2 gap-3 md:col-span-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
       </div>
       <Skeleton className="h-64 w-full" />
     </div>
