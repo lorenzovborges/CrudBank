@@ -36,4 +36,20 @@ class MoneyValidatorTest {
     void shouldRejectAmountWithMoreThanTwoDecimals() {
         assertThrows(DomainException.class, () -> MoneyValidator.validatePositiveAmount(new BigDecimal("1.001")));
     }
+
+    @Test
+    void shouldValidateNonNegativeAmount() {
+        BigDecimal zero = MoneyValidator.validateNonNegativeAmount(new BigDecimal("0"));
+        assertEquals(new BigDecimal("0.00"), zero);
+    }
+
+    @Test
+    void shouldRejectNegativeNonNegativeAmount() {
+        assertThrows(DomainException.class, () -> MoneyValidator.validateNonNegativeAmount(new BigDecimal("-0.01")));
+    }
+
+    @Test
+    void shouldRejectNullNonNegativeAmount() {
+        assertThrows(DomainException.class, () -> MoneyValidator.validateNonNegativeAmount(null, "initialBalance"));
+    }
 }

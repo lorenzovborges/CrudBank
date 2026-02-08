@@ -23,9 +23,17 @@ class AccountFieldNormalizerTest {
     void shouldRejectInvalidFields() {
         assertThatThrownBy(() -> AccountFieldNormalizer.normalizeOwnerName("  "))
             .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> AccountFieldNormalizer.normalizeOwnerName("Al"))
+            .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> AccountFieldNormalizer.normalizeOwnerName("A".repeat(121)))
+            .isInstanceOf(DomainException.class);
         assertThatThrownBy(() -> AccountFieldNormalizer.normalizeBranch("12"))
             .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> AccountFieldNormalizer.normalizeBranch(null))
+            .isInstanceOf(DomainException.class);
         assertThatThrownBy(() -> AccountFieldNormalizer.normalizeAccountNumber("abcd"))
+            .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> AccountFieldNormalizer.normalizeAccountNumber(null))
             .isInstanceOf(DomainException.class);
     }
 }

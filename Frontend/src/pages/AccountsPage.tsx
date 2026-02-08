@@ -1,4 +1,4 @@
-import { Suspense, useState, useCallback, useEffect } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 import { useLazyLoadQuery, fetchQuery, useRelayEnvironment } from 'react-relay'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,37 +14,60 @@ import type {
 
 type AccountEdge = AccountsQuery$data['accounts']['edges'][number]
 
-function AccountsContent() {
-  const [createOpen, setCreateOpen] = useState(false)
-  const [allEdges, setAllEdges] = useState<AccountEdge[]>([])
+function AccountsTableSection({
+  refreshKey,
+  onRefresh,
+}: {
+  refreshKey: number
+  onRefresh: () => void
+}) {
+  const [extraEdges, setExtraEdges] = useState<AccountEdge[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasNext, setHasNext] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
   const environment = useRelayEnvironment()
 
   const data = useLazyLoadQuery<AccountsQueryType>(
     AccountsQuery,
     { first: 20 },
-    { fetchPolicy: 'store-and-network', fetchKey: refreshKey }
+    { fetchPolicy: 'store-and-network', fetchKey: refreshKey },
   )
 
-  useEffect(() => {
-    setAllEdges(data.accounts.edges as unknown as AccountEdge[])
-    setHasNext(data.accounts.pageInfo.hasNextPage)
-    setCursor(data.accounts.pageInfo.endCursor ?? null)
-  }, [data])
+  const initialEdges = useMemo(
+    () => data.accounts.edges as unknown as AccountEdge[],
+    [data.accounts.edges],
+  )
+
+  const effectiveCursor = cursor ?? data.accounts.pageInfo.endCursor ?? null
+  const effectiveHasNext = cursor == null
+    ? data.accounts.pageInfo.hasNextPage
+    : hasNext
+
+  const accounts = useMemo(
+    () => [...initialEdges, ...extraEdges].map((edge) => ({
+      ...edge.node,
+      currentBalance: String(edge.node.currentBalance),
+      createdAt: String(edge.node.createdAt),
+      updatedAt: String(edge.node.updatedAt),
+    })),
+    [initialEdges, extraEdges],
+  )
 
   const loadMore = useCallback(() => {
-    if (!cursor || isLoadingMore) return
+    if (!effectiveCursor || isLoadingMore) {
+      return
+    }
     setIsLoadingMore(true)
 
     fetchQuery<AccountsQueryType>(environment, AccountsQuery, {
       first: 20,
-      after: cursor,
+      after: effectiveCursor,
     }).subscribe({
       next(nextData) {
-        setAllEdges((prev) => [...prev, ...(nextData.accounts.edges as unknown as AccountEdge[])])
+        setExtraEdges((prev) => [
+          ...prev,
+          ...(nextData.accounts.edges as unknown as AccountEdge[]),
+        ])
         setHasNext(nextData.accounts.pageInfo.hasNextPage)
         setCursor(nextData.accounts.pageInfo.endCursor ?? null)
         setIsLoadingMore(false)
@@ -53,14 +76,33 @@ function AccountsContent() {
         setIsLoadingMore(false)
       },
     })
-  }, [cursor, isLoadingMore, environment])
+  }, [effectiveCursor, isLoadingMore, environment])
 
-  const accounts = allEdges.map((e) => ({
-    ...e.node,
-    currentBalance: String(e.node.currentBalance),
-    createdAt: String(e.node.createdAt),
-    updatedAt: String(e.node.updatedAt),
-  }))
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">All Accounts</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <AccountsTable
+          accounts={accounts}
+          hasNextPage={effectiveHasNext}
+          onLoadMore={loadMore}
+          isLoadingMore={isLoadingMore}
+          onRefresh={onRefresh}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
+function AccountsContent() {
+  const [createOpen, setCreateOpen] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const refresh = useCallback(() => {
+    setRefreshKey((current) => current + 1)
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -72,22 +114,9 @@ function AccountsContent() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">All Accounts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AccountsTable
-            accounts={accounts}
-            hasNextPage={hasNext}
-            onLoadMore={loadMore}
-            isLoadingMore={isLoadingMore}
-            onRefresh={() => setRefreshKey((k) => k + 1)}
-          />
-        </CardContent>
-      </Card>
+      <AccountsTableSection key={refreshKey} refreshKey={refreshKey} onRefresh={refresh} />
 
-      <CreateAccountDialog open={createOpen} onOpenChange={setCreateOpen} onSuccess={() => setRefreshKey((k) => k + 1)} />
+      <CreateAccountDialog open={createOpen} onOpenChange={setCreateOpen} onSuccess={refresh} />
     </div>
   )
 }

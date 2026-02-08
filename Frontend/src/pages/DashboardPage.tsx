@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TransferDialog } from '@/components/transactions/TransferDialog'
 import { DashboardQuery } from '@/graphql/DashboardQuery'
 import type { DashboardQuery as DashboardQueryType } from '@/graphql/__generated__/DashboardQuery.graphql'
+import { sumCents } from '@/lib/money'
 
 function DashboardContent() {
   const [transferOpen, setTransferOpen] = useState(false)
@@ -21,16 +22,13 @@ function DashboardContent() {
   )
 
   const accounts = data.accounts.edges.map((edge) => edge.node)
-  const totalBalance = accounts.reduce(
-    (sum, account) => sum + parseFloat(account.currentBalance),
-    0,
-  )
+  const totalBalanceCents = sumCents(accounts.map((account) => account.currentBalance))
   const accountIds = accounts.map((account) => account.id)
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <BalanceCard
-          totalBalance={totalBalance}
+          totalBalanceCents={totalBalanceCents}
           accountCount={accounts.length}
         />
 

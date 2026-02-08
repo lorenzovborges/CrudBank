@@ -1,60 +1,47 @@
 # CrudBank Backend (GraphQL Relay)
 
-A Docker-first backend for the Woovi Crud Bank challenge built with **Spring Boot 3.5.10** and **Java 21**.
+Spring Boot backend for the Crud Bank challenge, using Java 21, MongoDB, GraphQL, Relay global IDs/connections, idempotent transfers, and per-account rate limiting.
 
-This API is intentionally **public (no authentication)** and focuses only on banking domain operations:
-- Account creation, update, deactivation, and listing
-- Money transfer between accounts
-- Available balance calculation
-- Relay-compatible GraphQL schema (`Node`, global IDs, `Connection`, `Edge`, `PageInfo`)
-- Idempotent transfers scoped by `fromAccountId + idempotencyKey`
-- Leaky bucket rate limiting scoped by source account
+## Stack
 
-## Project Overview
-
-The backend follows a consistency-first model for financial operations:
-- Transfers are executed inside MongoDB transactions.
-- `Transaction` is immutable ledger data.
-- `Account.currentBalance` is an atomic snapshot for fast reads.
-- Idempotency prevents duplicate transfer processing during retries.
-
-## Stack and Architecture Decisions
-
-### Technology
 - Java 21
 - Spring Boot 3.5.10
 - Spring GraphQL
 - Spring Data MongoDB
-- MongoDB replica set (required for transactions)
-- JUnit 5, Spring Boot Test, Spring GraphQL Test, Testcontainers
-- JaCoCo coverage gate
+- MongoDB replica set (required for Mongo transactions)
+- JUnit 5 + Testcontainers + JaCoCo
 
-### Architecture
-Subject-based modules with internal layering:
-- `account`
-- `transaction`
-- `balance`
-- `ratelimit`
-- `shared`
+## Run
 
-Each module separates API, application service, domain, and infrastructure concerns.
-
-## Prerequisites
-
-Recommended flow:
-- Docker Desktop (or Docker Engine + Docker Compose plugin)
-
-Optional local flow:
-- Java 21
-- Maven 3.9+
-
-## Configure Environment
+Recommended (Docker):
 
 ```bash
+cd Backend
+docker compose up --build -d
+```
+
+Local JVM run:
+
+```bash
+cd Backend
+mvn spring-boot:run
+```
+
+Endpoints:
+
+- GraphQL: `http://localhost:8080/graphql`
+- GraphiQL: `http://localhost:8080/graphiql`
+- Health: `http://localhost:8080/actuator/health`
+
+## Environment
+
+```bash
+cd Backend
 cp .env.example .env
 ```
 
 Main variables:
+
 - `APP_PORT`
 - `MONGODB_URI`
 - `GRAPHQL_MAX_DEPTH`
@@ -66,88 +53,57 @@ Main variables:
 - `SEED_DEFAULT_ACCOUNT_BALANCE`
 - `CORS_ALLOWED_ORIGINS`
 
-## Run Full Stack with Docker (Recommended)
+## Domain Behavior
 
-From `/Backend`:
+- `Transaction` is immutable ledger data.
+- `Account.currentBalance` is updated atomically in the same transfer transaction.
+- Only `BRL` is supported.
+- Account deactivation is soft (`INACTIVE`).
 
-```bash
-docker compose up --build -d
-```
+## Transfer Idempotency (Current Semantics)
 
-Check services:
+Idempotency is scoped by `(sourceAccountId, idempotencyKey)` and backed by a unique index in MongoDB.
 
-```bash
-docker compose ps
-```
+Status flow:
 
-Follow API logs:
+1. Reserve idempotency record as `PENDING`.
+2. Execute transfer transaction.
+3. Persist replay payload and mark record `COMPLETED`.
 
-```bash
-docker compose logs -f app
-```
+Duplicate key handling:
 
-Stop stack:
+- Same key + same request hash + `COMPLETED`: immediate replay (`idempotentReplay = true`).
+- Same key + different request hash: `CONFLICT`.
+- Same key + `PENDING`: short bounded polling (8 attempts x 25ms); if still pending, return `CONFLICT` with retry guidance.
 
-```bash
-docker compose down
-```
+Failure behavior:
 
-Clean reset (including Mongo volume):
+- If transfer fails before completion, pending record is cleaned when safe, so retry with same key can proceed.
 
-```bash
-docker compose down -v
-```
+## GraphQL API
 
-### Endpoints
-- GraphQL: `http://localhost:8080/graphql`
-- GraphiQL: `http://localhost:8080/graphiql`
-- Health: `http://localhost:8080/actuator/health`
+Core operations:
 
-## Optional Local Run (Without Containerized App)
+- `createAccount`
+- `updateAccount`
+- `deactivateAccount`
+- `transferFunds`
+- `availableBalance`
+- `accounts` (Relay connection)
+- `transactionsByAccount` (Relay connection)
+- `node`
 
-```bash
-mvn spring-boot:run
-```
+Recent transactions API (additive, non-breaking):
 
-## GraphiQL Sample Operations
+- `recentTransactions(accountIds: [ID!]!, first: Int!): [RecentTransaction!]!`
+- `RecentTransaction.type`: `SENT | RECEIVED | TRANSFER` (relative to the account set passed in `accountIds`).
 
-### Create Account
-
-```graphql
-mutation CreateAccount($input: CreateAccountInput!) {
-  createAccount(input: $input) {
-    id
-    ownerName
-    branch
-    number
-    currentBalance
-    status
-  }
-}
-```
-
-Variables:
-
-```json
-{
-  "input": {
-    "ownerName": "Alice",
-    "document": "12345678901",
-    "branch": "0001",
-    "number": "12345-6",
-    "initialBalance": "1000.00"
-  }
-}
-```
-
-### Transfer Funds
+Example:
 
 ```graphql
-mutation Transfer($input: TransferFundsInput!) {
-  transferFunds(input: $input) {
-    idempotentReplay
-    fromAccountBalance
-    toAccountBalance
+query RecentTransactions($accountIds: [ID!]!, $first: Int!) {
+  recentTransactions(accountIds: $accountIds, first: $first) {
+    type
     transaction {
       id
       fromAccountId
@@ -160,73 +116,12 @@ mutation Transfer($input: TransferFundsInput!) {
 }
 ```
 
-### Available Balance
+## Errors
 
-```graphql
-query Balance($accountId: ID!) {
-  availableBalance(accountId: $accountId)
-}
-```
+GraphQL errors return `extensions.code`.
 
-## Relay Pagination Usage
+Codes used by the API:
 
-### Accounts connection
-
-```graphql
-query Accounts($first: Int!, $after: String, $status: AccountStatus) {
-  accounts(first: $first, after: $after, status: $status) {
-    edges {
-      cursor
-      node {
-        id
-        ownerName
-        status
-      }
-    }
-    pageInfo {
-      hasNextPage
-      hasPreviousPage
-      startCursor
-      endCursor
-    }
-  }
-}
-```
-
-### Node lookup
-
-```graphql
-query Node($id: ID!) {
-  node(id: $id) {
-    id
-    ... on Account {
-      ownerName
-      currentBalance
-    }
-    ... on Transaction {
-      amount
-      description
-    }
-  }
-}
-```
-
-## Business Rules and Error Codes
-
-### Core rules
-- Currency is BRL only.
-- Transfer amount must be positive and use 2 decimal places.
-- Source and destination accounts must be different.
-- Inactive accounts cannot send or receive transfers.
-- Insufficient funds fail atomically.
-- Account removal is soft delete (`INACTIVE`) only.
-- Account `branch` and `number` are immutable after creation.
-- `idempotencyKey` is required for `transferFunds`.
-
-### Error format
-GraphQL errors use `extensions.code`.
-
-Possible values:
 - `BAD_REQUEST`
 - `NOT_FOUND`
 - `CONFLICT`
@@ -236,52 +131,37 @@ Possible values:
 - `RATE_LIMITED`
 - `INTERNAL_ERROR`
 
-`RATE_LIMITED` includes `retryAfterSeconds` in `extensions`.
-
-## Tests and Coverage
+## Quality Gates
 
 Run tests:
 
 ```bash
+cd Backend
 mvn test
 ```
 
-Run full verification with coverage gate:
+Run full CI gate (tests + JaCoCo):
 
 ```bash
+cd Backend
 mvn clean verify
 ```
 
-JaCoCo line and branch checks are enforced by the build.
+JaCoCo minimums are enforced in `pom.xml`:
 
-## Postman Collection
+- line coverage >= 90%
+- branch coverage >= 90%
 
-Collection file:
-- `postman/CrudBankGraphQL.postman_collection.json`
+## Postman
 
-Import it and run requests in this sequence:
+Collection path:
+
+- `Backend/postman/CrudBankGraphQL.postman_collection.json`
+
+Suggested flow:
+
 1. Create Account A
 2. Create Account B
 3. Transfer Funds
-4. Available Balance
-5. List Accounts (Relay)
-6. Transactions By Account
-
-Default variables:
-- `baseUrl` = `http://localhost:8080`
-- `fromAccountId`
-- `toAccountId`
-- `idempotencyKey`
-
-## Troubleshooting
-
-- If transfer operations fail due to transaction support, ensure Mongo replica set is up (`mongo` + `mongo-init-replica` services).
-- If you changed indexes or idempotency strategy, reset local data:
-  ```bash
-  docker compose down -v
-  docker compose up --build -d
-  ```
-- If app starts before Mongo is healthy, inspect startup order:
-  ```bash
-  docker compose logs -f mongo mongo-init-replica app
-  ```
+4. Query Available Balance
+5. Query Accounts / Transactions / Recent Transactions

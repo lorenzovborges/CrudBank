@@ -9,6 +9,8 @@
     "relay": "relay-compiler",
     "relay:watch": "relay-compiler --watch",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -34,12 +36,16 @@
     "@types/react-relay": "^18.2.1",
     "@types/relay-runtime": "^20.1.1",
     "@vitejs/plugin-react": "^5.1.1",
+    "@testing-library/jest-dom": "^6.7.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "babel-plugin-relay": "^20.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "graphql": "^16.12.0",
+    "jsdom": "^26.1.0",
     "relay-compiler": "^20.1.1",
     "shadcn": "^3.8.4",
     "tailwindcss": "^4.1.18",
@@ -47,6 +53,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vite-plugin-relay": "^2.1.0"
+    "vite-plugin-relay": "^2.1.0",
+    "vitest": "^3.2.4"
   }
 }

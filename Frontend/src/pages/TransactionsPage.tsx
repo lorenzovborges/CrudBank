@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router'
 import { fetchQuery, useLazyLoadQuery, useRelayEnvironment } from 'react-relay'
 import { TransactionsTable } from '@/components/transactions/TransactionsTable'
@@ -32,7 +32,7 @@ function TransactionsList({
   accountLabelMap: Map<string, string>
 }) {
   const environment = useRelayEnvironment()
-  const [allEdges, setAllEdges] = useState<TransactionEdge[]>([])
+  const [extraEdges, setExtraEdges] = useState<TransactionEdge[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasNext, setHasNext] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -43,23 +43,29 @@ function TransactionsList({
     { fetchPolicy: 'store-and-network', fetchKey: `${accountId}-${direction}` },
   )
 
-  useEffect(() => {
-    setAllEdges(data.transactionsByAccount.edges as unknown as TransactionEdge[])
-    setHasNext(data.transactionsByAccount.pageInfo.hasNextPage)
-    setCursor(data.transactionsByAccount.pageInfo.endCursor ?? null)
-  }, [data, accountId, direction])
+  const initialEdges = useMemo(
+    () => data.transactionsByAccount.edges as unknown as TransactionEdge[],
+    [data.transactionsByAccount.edges],
+  )
+
+  const effectiveCursor = cursor ?? data.transactionsByAccount.pageInfo.endCursor ?? null
+  const effectiveHasNext = cursor == null
+    ? data.transactionsByAccount.pageInfo.hasNextPage
+    : hasNext
 
   const loadMore = useCallback(() => {
-    if (!cursor || isLoadingMore) return
+    if (!effectiveCursor || isLoadingMore) {
+      return
+    }
     setIsLoadingMore(true)
 
     fetchQuery<TransactionsByAccountQueryType>(
       environment,
       TransactionsByAccountQuery,
-      { accountId, direction, first: 20, after: cursor },
+      { accountId, direction, first: 20, after: effectiveCursor },
     ).subscribe({
       next(nextData) {
-        setAllEdges((prev) => [
+        setExtraEdges((prev) => [
           ...prev,
           ...(nextData.transactionsByAccount.edges as unknown as TransactionEdge[]),
         ])
@@ -71,27 +77,30 @@ function TransactionsList({
         setIsLoadingMore(false)
       },
     })
-  }, [cursor, isLoadingMore, environment, accountId, direction])
+  }, [effectiveCursor, isLoadingMore, environment, accountId, direction])
 
-  const transactions = allEdges.map((edge) => {
-    const counterpartyId =
-      direction === 'SENT' ? edge.node.toAccountId : edge.node.fromAccountId
+  const transactions = useMemo(
+    () => [...initialEdges, ...extraEdges].map((edge) => {
+      const counterpartyId =
+        direction === 'SENT' ? edge.node.toAccountId : edge.node.fromAccountId
 
-    return {
-      id: edge.node.id,
-      amount: String(edge.node.amount),
-      currency: edge.node.currency,
-      description: edge.node.description,
-      createdAt: String(edge.node.createdAt),
-      counterpartyLabel: accountLabelMap.get(counterpartyId) ?? 'Unknown account',
-    }
-  })
+      return {
+        id: edge.node.id,
+        amount: String(edge.node.amount),
+        currency: edge.node.currency,
+        description: edge.node.description,
+        createdAt: String(edge.node.createdAt),
+        counterpartyLabel: accountLabelMap.get(counterpartyId) ?? 'Unknown account',
+      }
+    }),
+    [initialEdges, extraEdges, direction, accountLabelMap],
+  )
 
   return (
     <TransactionsTable
       transactions={transactions}
       direction={direction}
-      hasNextPage={hasNext}
+      hasNextPage={effectiveHasNext}
       onLoadMore={loadMore}
       isLoadingMore={isLoadingMore}
     />
@@ -102,6 +111,8 @@ function TransactionsContent() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const preselectedAccountId = searchParams.get('accountId') || ''
+  const [manualSelectedAccountId, setManualSelectedAccountId] = useState('')
+  const [direction, setDirection] = useState<'SENT' | 'RECEIVED'>('SENT')
 
   const accountsData = useLazyLoadQuery<AccountsQueryType>(
     AccountsQuery,
@@ -112,55 +123,52 @@ function TransactionsContent() {
     },
   )
 
-  const allAccounts = accountsData.accounts.edges.map((edge) => edge.node)
-  const selectableAccounts = allAccounts.filter((account) => account.status === 'ACTIVE')
-  const accountLabelMap = new Map(
-    allAccounts.map((account) => [
-      account.id,
-      `${account.ownerName} - ${account.branch}/${account.number}`,
-    ]),
+  const allAccounts = useMemo(
+    () => accountsData.accounts.edges.map((edge) => edge.node),
+    [accountsData.accounts.edges],
   )
 
-  const [selectedAccountId, setSelectedAccountId] = useState(() => {
-    if (preselectedAccountId) {
-      const existsInActive = selectableAccounts.some(
-        (account) => account.id === preselectedAccountId,
-      )
-      if (existsInActive) {
-        return preselectedAccountId
-      }
-    }
-    return selectableAccounts.length > 0 ? selectableAccounts[0].id : ''
-  })
-  const [direction, setDirection] = useState<'SENT' | 'RECEIVED'>('SENT')
+  const selectableAccounts = useMemo(
+    () => allAccounts.filter((account) => account.status === 'ACTIVE'),
+    [allAccounts],
+  )
 
-  useEffect(() => {
+  const accountLabelMap = useMemo(
+    () =>
+      new Map(
+        allAccounts.map((account) => [
+          account.id,
+          `${account.ownerName} - ${account.branch}/${account.number}`,
+        ]),
+      ),
+    [allAccounts],
+  )
+
+  const selectedAccountId = useMemo(() => {
     if (selectableAccounts.length === 0) {
-      if (selectedAccountId !== '') {
-        setSelectedAccountId('')
+      return ''
+    }
+
+    if (manualSelectedAccountId.length > 0) {
+      const selectedIsActive = selectableAccounts.some(
+        (account) => account.id === manualSelectedAccountId,
+      )
+      if (selectedIsActive) {
+        return manualSelectedAccountId
       }
-      return
     }
 
-    const currentSelectionIsActive = selectableAccounts.some(
-      (account) => account.id === selectedAccountId,
-    )
-    if (currentSelectionIsActive) {
-      return
-    }
-
-    if (preselectedAccountId) {
+    if (preselectedAccountId.length > 0) {
       const preselectedIsActive = selectableAccounts.some(
         (account) => account.id === preselectedAccountId,
       )
       if (preselectedIsActive) {
-        setSelectedAccountId(preselectedAccountId)
-        return
+        return preselectedAccountId
       }
     }
 
-    setSelectedAccountId(selectableAccounts[0].id)
-  }, [selectableAccounts, selectedAccountId, preselectedAccountId])
+    return selectableAccounts[0].id
+  }, [manualSelectedAccountId, preselectedAccountId, selectableAccounts])
 
   if (!selectedAccountId || selectableAccounts.length === 0) {
     return (
@@ -178,7 +186,7 @@ function TransactionsContent() {
 
       <div className="flex items-center gap-4">
         <div className="w-72">
-          <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+          <Select value={selectedAccountId} onValueChange={setManualSelectedAccountId}>
             <SelectTrigger>
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
@@ -209,6 +217,7 @@ function TransactionsContent() {
             <TabsContent value="SENT" className="mt-4">
               <Suspense fallback={<Skeleton className="h-48 w-full" />}>
                 <TransactionsList
+                  key={`${selectedAccountId}-SENT`}
                   accountId={selectedAccountId}
                   direction="SENT"
                   accountLabelMap={accountLabelMap}
@@ -218,6 +227,7 @@ function TransactionsContent() {
             <TabsContent value="RECEIVED" className="mt-4">
               <Suspense fallback={<Skeleton className="h-48 w-full" />}>
                 <TransactionsList
+                  key={`${selectedAccountId}-RECEIVED`}
                   accountId={selectedAccountId}
                   direction="RECEIVED"
                   accountLabelMap={accountLabelMap}

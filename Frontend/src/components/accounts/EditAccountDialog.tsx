@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useMutation } from 'react-relay'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -31,22 +31,19 @@ interface EditAccountDialogProps {
 }
 
 export function EditAccountDialog({ open, onOpenChange, account, onSuccess }: EditAccountDialogProps) {
-  const [ownerName, setOwnerName] = useState('')
-  const [document, setDocument] = useState('')
+  const [ownerName, setOwnerName] = useState(account?.ownerName ?? '')
+  const [document, setDocument] = useState(account?.document ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [commitUpdate, isLoading] = useMutation<UpdateAccountMutationType>(UpdateAccountMutation)
 
-  useEffect(() => {
-    if (account) {
-      setOwnerName(account.ownerName)
-      setDocument(account.document)
-      setErrors({})
-    }
-  }, [account])
+  if (!account) {
+    return null
+  }
+  const accountId = account.id
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!account) return
+
     const normalizedOwnerName = ownerName.trim().replace(/\s+/g, ' ')
     const normalizedDocument = normalizeDocument(document)
     const nextErrors: Record<string, string> = {}
@@ -67,7 +64,7 @@ export function EditAccountDialog({ open, onOpenChange, account, onSuccess }: Ed
     commitUpdate({
       variables: {
         input: {
-          id: account.id,
+          id: accountId,
           ownerName: normalizedOwnerName,
           document: normalizedDocument,
         },

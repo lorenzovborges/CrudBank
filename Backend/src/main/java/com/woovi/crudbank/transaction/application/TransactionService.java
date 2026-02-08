@@ -16,8 +16,11 @@ import com.woovi.crudbank.shared.util.MoneyValidator;
 import com.woovi.crudbank.transaction.api.TransactionView;
 import com.woovi.crudbank.transaction.api.TransferFundsPayloadView;
 import com.woovi.crudbank.transaction.domain.IdempotencyRecordDocument;
+import com.woovi.crudbank.transaction.domain.IdempotencyRecordStatus;
+import com.woovi.crudbank.transaction.domain.RecentTransactionType;
 import com.woovi.crudbank.transaction.domain.TransactionDirection;
 import com.woovi.crudbank.transaction.domain.TransactionDocument;
+import com.woovi.crudbank.transaction.api.RecentTransactionView;
 import com.woovi.crudbank.transaction.infrastructure.IdempotencyRecordRepository;
 import com.woovi.crudbank.transaction.infrastructure.TransactionRepository;
 import graphql.relay.Connection;
@@ -44,11 +47,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Set;
 
 @Service
 public class TransactionService {
@@ -57,6 +58,11 @@ public class TransactionService {
         Sort.Order.desc("createdAt"),
         Sort.Order.desc("id")
     );
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int DEFAULT_RECENT_PAGE_SIZE = 10;
+    private static final int IDEMPOTENCY_POLL_ATTEMPTS = 8;
+    private static final long IDEMPOTENCY_POLL_SLEEP_MS = 25L;
 
     private final TransactionRepository transactionRepository;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
@@ -68,7 +74,6 @@ public class TransactionService {
     private final IdempotencyProperties idempotencyProperties;
     private final LeakyBucketService leakyBucketService;
     private final TransactionTemplate transactionTemplate;
-    private final ConcurrentMap<String, IdempotencyKeyLock> idempotencyLocks = new ConcurrentHashMap<>();
 
     public TransactionService(
         TransactionRepository transactionRepository,
@@ -119,66 +124,56 @@ public class TransactionService {
             throw DomainException.validationField("toAccountId", "Source and destination accounts must be different");
         }
 
-        String requestHash = buildRequestHash(fromAccount.getId(), toAccount.getId(), normalizedAmount, normalizedDescription);
-        String lockKey = fromAccount.getId() + ":" + normalizedIdempotencyKey;
-        IdempotencyKeyLock lock = acquireIdempotencyLock(lockKey);
-        lock.reentrantLock().lock();
+        String requestHash = buildRequestHash(
+            fromAccount.getId(),
+            toAccount.getId(),
+            normalizedAmount,
+            normalizedDescription
+        );
+        IdempotencyRecordDocument existingRecord = idempotencyRecordRepository
+            .findBySourceAccountIdAndKey(fromAccount.getId(), normalizedIdempotencyKey)
+            .orElse(null);
+        if (existingRecord != null) {
+            return replayOrWait(existingRecord, fromAccount.getId(), normalizedIdempotencyKey, requestHash);
+        }
+
+        IdempotencyRecordDocument reservedRecord = newPendingRecord(
+            fromAccount.getId(),
+            normalizedIdempotencyKey,
+            requestHash,
+            Instant.now()
+        );
         try {
-            IdempotencyRecordDocument existingRecord = idempotencyRecordRepository
-                .findBySourceAccountIdAndKey(fromAccount.getId(), normalizedIdempotencyKey)
-                .orElse(null);
+            reservedRecord = idempotencyRecordRepository.save(reservedRecord);
+        } catch (DataIntegrityViolationException ex) {
+            IdempotencyRecordDocument concurrentRecord = findIdempotencyRecord(
+                fromAccount.getId(),
+                normalizedIdempotencyKey
+            );
+            return replayOrWait(concurrentRecord, fromAccount.getId(), normalizedIdempotencyKey, requestHash);
+        }
+        final IdempotencyRecordDocument persistedRecord = reservedRecord;
 
-            if (existingRecord != null) {
-                return replayOrWait(existingRecord, fromAccount.getId(), normalizedIdempotencyKey, requestHash);
+        try {
+            TransferFundsPayloadView payload = transactionTemplate.execute(status -> executeTransfer(
+                fromAccount.getId(),
+                toAccount.getId(),
+                normalizedAmount,
+                normalizedDescription,
+                normalizedIdempotencyKey,
+                persistedRecord
+            ));
+            if (payload == null) {
+                throw DomainException.badRequest("Unable to process transfer");
             }
-
-            Instant now = Instant.now();
-            IdempotencyRecordDocument record = new IdempotencyRecordDocument();
-            record.setSourceAccountId(fromAccount.getId());
-            record.setKey(normalizedIdempotencyKey);
-            record.setRequestHash(requestHash);
-            record.setCreatedAt(now);
-            record.setExpiresAt(now.plusSeconds(idempotencyProperties.ttlHours() * 3600L));
-
-            try {
-                record = idempotencyRecordRepository.save(record);
-            } catch (DataIntegrityViolationException ex) {
-                IdempotencyRecordDocument concurrentRecord = idempotencyRecordRepository
-                    .findBySourceAccountIdAndKey(fromAccount.getId(), normalizedIdempotencyKey)
-                    .orElseThrow(() -> DomainException.conflict("Idempotency conflict"));
-                return replayOrWait(concurrentRecord, fromAccount.getId(), normalizedIdempotencyKey, requestHash);
-            }
-
-            IdempotencyRecordDocument reservedRecord = record;
-            try {
-                TransferFundsPayloadView payload = transactionTemplate.execute(status -> executeTransfer(
-                    fromAccount.getId(),
-                    toAccount.getId(),
-                    normalizedAmount,
-                    normalizedDescription,
-                    normalizedIdempotencyKey,
-                    reservedRecord
-                ));
-                if (payload == null) {
-                    throw DomainException.badRequest("Unable to process transfer");
-                }
-                return payload;
-            } catch (DataIntegrityViolationException ex) {
-                cleanupPendingRecord(reservedRecord.getId(), requestHash);
-
-                IdempotencyRecordDocument concurrentRecord = idempotencyRecordRepository
-                    .findBySourceAccountIdAndKey(fromAccount.getId(), normalizedIdempotencyKey)
-                    .orElse(null);
-                if (concurrentRecord != null && requestHash.equals(concurrentRecord.getRequestHash())) {
-                    return replayOrWait(concurrentRecord, fromAccount.getId(), normalizedIdempotencyKey, requestHash);
-                }
-                throw DomainException.conflict("Transfer could not be completed due to concurrent update. Retry with the same idempotency key");
-            } catch (RuntimeException ex) {
-                cleanupPendingRecord(reservedRecord.getId(), requestHash);
-                throw ex;
-            }
-        } finally {
-            releaseIdempotencyLock(lockKey, lock);
+            return payload;
+        } catch (DataIntegrityViolationException ex) {
+            cleanupPendingRecord(persistedRecord.getId(), requestHash);
+            IdempotencyRecordDocument currentRecord = findIdempotencyRecord(fromAccount.getId(), normalizedIdempotencyKey);
+            return replayOrWait(currentRecord, fromAccount.getId(), normalizedIdempotencyKey, requestHash);
+        } catch (RuntimeException ex) {
+            cleanupPendingRecord(persistedRecord.getId(), requestHash);
+            throw ex;
         }
     }
 
@@ -198,8 +193,8 @@ public class TransactionService {
         Integer first,
         String afterCursor
     ) {
-        int size = first == null ? 20 : first;
-        if (size <= 0 || size > 100) {
+        int size = first == null ? DEFAULT_PAGE_SIZE : first;
+        if (size <= 0 || size > MAX_PAGE_SIZE) {
             throw DomainException.validation("first must be between 1 and 100");
         }
 
@@ -242,6 +237,45 @@ public class TransactionService {
         DefaultPageInfo pageInfo = new DefaultPageInfo(startCursor, endCursor, afterCursor != null, hasNextPage);
 
         return new DefaultConnection<>(edges, pageInfo);
+    }
+
+    public List<RecentTransactionView> listRecentTransactions(List<String> accountGlobalIds, Integer first) {
+        int size = first == null ? DEFAULT_RECENT_PAGE_SIZE : first;
+        if (size <= 0 || size > MAX_PAGE_SIZE) {
+            throw DomainException.validation("first must be between 1 and 100");
+        }
+        if (accountGlobalIds == null || accountGlobalIds.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> accountIds = new HashSet<>();
+        for (String accountGlobalId : accountGlobalIds) {
+            if (!StringUtils.hasText(accountGlobalId)) {
+                throw DomainException.validationField("accountIds", "Account id is required");
+            }
+            accountIds.add(accountService.decodeAccountId(accountGlobalId));
+        }
+        if (accountIds.isEmpty()) {
+            return List.of();
+        }
+
+        Query query = new Query();
+        query.addCriteria(new Criteria().orOperator(
+            Criteria.where("fromAccountId").in(accountIds),
+            Criteria.where("toAccountId").in(accountIds)
+        ));
+        query.with(DEFAULT_SORT);
+        query.limit(size);
+
+        List<TransactionDocument> documents = mongoTemplate.find(query, TransactionDocument.class);
+        List<RecentTransactionView> recentTransactions = new ArrayList<>(documents.size());
+        for (TransactionDocument document : documents) {
+            recentTransactions.add(new RecentTransactionView(
+                toView(document),
+                resolveRecentType(document, accountIds)
+            ));
+        }
+        return recentTransactions;
     }
 
     public TransactionView toView(TransactionDocument transaction) {
@@ -351,6 +385,8 @@ public class TransactionService {
         );
 
         idempotencyRecord.setResponsePayload(serializePayload(payload));
+        idempotencyRecord.setStatus(IdempotencyRecordStatus.COMPLETED);
+        idempotencyRecord.setUpdatedAt(now);
         idempotencyRecordRepository.save(idempotencyRecord);
         return payload;
     }
@@ -366,28 +402,26 @@ public class TransactionService {
         }
 
         IdempotencyRecordDocument current = record;
-        for (int attempt = 0; attempt < 100; attempt++) {
-            if (StringUtils.hasText(current.getResponsePayload())) {
+        for (int attempt = 0; attempt < IDEMPOTENCY_POLL_ATTEMPTS; attempt++) {
+            if (isCompleted(current) && StringUtils.hasText(current.getResponsePayload())) {
                 return buildReplayFromRecord(current, requestHash);
             }
+            if (!isPending(current)) {
+                break;
+            }
+
+            sleepBeforeNextIdempotencyPoll();
 
             current = idempotencyRecordRepository
                 .findBySourceAccountIdAndKey(sourceAccountId, idempotencyKey)
                 .orElseThrow(() -> DomainException.conflict("Idempotency conflict"));
-
-            if (StringUtils.hasText(current.getResponsePayload())) {
-                return buildReplayFromRecord(current, requestHash);
-            }
-
-            try {
-                Thread.sleep(50L);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                throw DomainException.conflict("Idempotency key is currently being processed");
-            }
         }
 
-        throw DomainException.conflict("Idempotency key is currently being processed");
+        if (isCompleted(current) && StringUtils.hasText(current.getResponsePayload())) {
+            return buildReplayFromRecord(current, requestHash);
+        }
+
+        throw DomainException.conflict("Idempotency key is currently being processed. Retry with the same idempotency key");
     }
 
     private void cleanupPendingRecord(String idempotencyRecordId, String requestHash) {
@@ -396,7 +430,7 @@ public class TransactionService {
         }
 
         idempotencyRecordRepository.findById(idempotencyRecordId).ifPresent(record -> {
-            if (requestHash.equals(record.getRequestHash()) && !StringUtils.hasText(record.getResponsePayload())) {
+            if (requestHash.equals(record.getRequestHash()) && isPending(record) && !StringUtils.hasText(record.getResponsePayload())) {
                 idempotencyRecordRepository.deleteById(idempotencyRecordId);
             }
         });
@@ -455,30 +489,58 @@ public class TransactionService {
         return normalized;
     }
 
-    private IdempotencyKeyLock acquireIdempotencyLock(String lockKey) {
-        return idempotencyLocks.compute(lockKey, (ignored, existing) -> {
-            IdempotencyKeyLock keyLock = existing == null ? new IdempotencyKeyLock() : existing;
-            keyLock.references().incrementAndGet();
-            return keyLock;
-        });
-    }
-
-    private void releaseIdempotencyLock(String lockKey, IdempotencyKeyLock lock) {
-        lock.reentrantLock().unlock();
-        idempotencyLocks.compute(lockKey, (ignored, current) -> {
-            if (current != lock) {
-                return current;
-            }
-            return lock.references().decrementAndGet() == 0 ? null : lock;
-        });
-    }
-
-    private record IdempotencyKeyLock(
-        ReentrantLock reentrantLock,
-        AtomicInteger references
+    private IdempotencyRecordDocument newPendingRecord(
+        String sourceAccountId,
+        String key,
+        String requestHash,
+        Instant now
     ) {
-        private IdempotencyKeyLock() {
-            this(new ReentrantLock(), new AtomicInteger(0));
+        IdempotencyRecordDocument record = new IdempotencyRecordDocument();
+        record.setSourceAccountId(sourceAccountId);
+        record.setKey(key);
+        record.setRequestHash(requestHash);
+        record.setStatus(IdempotencyRecordStatus.PENDING);
+        record.setCreatedAt(now);
+        record.setUpdatedAt(now);
+        record.setExpiresAt(now.plusSeconds(idempotencyProperties.ttlHours() * 3600L));
+        return record;
+    }
+
+    private IdempotencyRecordDocument findIdempotencyRecord(String sourceAccountId, String key) {
+        return idempotencyRecordRepository.findBySourceAccountIdAndKey(sourceAccountId, key)
+            .orElseThrow(() -> DomainException.conflict("Idempotency conflict"));
+    }
+
+    private RecentTransactionType resolveRecentType(TransactionDocument document, Set<String> accountIds) {
+        boolean sent = accountIds.contains(document.getFromAccountId());
+        boolean received = accountIds.contains(document.getToAccountId());
+
+        if (sent && received) {
+            return RecentTransactionType.TRANSFER;
+        }
+        return received ? RecentTransactionType.RECEIVED : RecentTransactionType.SENT;
+    }
+
+    private boolean isCompleted(IdempotencyRecordDocument record) {
+        if (record.getStatus() == IdempotencyRecordStatus.COMPLETED) {
+            return true;
+        }
+        return record.getStatus() == null && StringUtils.hasText(record.getResponsePayload());
+    }
+
+    private boolean isPending(IdempotencyRecordDocument record) {
+        if (record.getStatus() == IdempotencyRecordStatus.PENDING) {
+            return true;
+        }
+        return record.getStatus() == null && !StringUtils.hasText(record.getResponsePayload());
+    }
+
+    private void sleepBeforeNextIdempotencyPoll() {
+        try {
+            Thread.sleep(IDEMPOTENCY_POLL_SLEEP_MS);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw DomainException.conflict("Idempotency key is currently being processed");
         }
     }
 }

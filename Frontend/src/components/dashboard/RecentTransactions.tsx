@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { fetchQuery, useRelayEnvironment } from 'react-relay'
+import { Component, type ReactNode, useMemo } from 'react'
+import { useLazyLoadQuery } from 'react-relay'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -10,13 +10,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/currency'
 import { RecentTransactionsQuery } from '@/graphql/RecentTransactionsQuery'
-import type {
-  RecentTransactionsQuery as RecentTransactionsQueryType,
-  RecentTransactionsQuery$data,
-} from '@/graphql/__generated__/RecentTransactionsQuery.graphql'
+import type { RecentTransactionsQuery as RecentTransactionsQueryType } from '@/graphql/__generated__/RecentTransactionsQuery.graphql'
 
 interface RecentTransactionsProps {
   accountIds: string[]
@@ -28,120 +24,119 @@ type TransactionType = 'SENT' | 'RECEIVED' | 'TRANSFER'
 interface RecentTransactionRow {
   id: string
   amount: string
-  currency: string
   description: string
   createdAt: string
   type: TransactionType
 }
 
-interface AggregatedTransaction {
-  id: string
-  amount: string
-  currency: string
-  description: string
-  createdAt: string
-  directions: Set<'SENT' | 'RECEIVED'>
+interface RecentTransactionsErrorBoundaryProps {
+  resetKey: string
+  children: ReactNode
 }
 
-function upsertTransaction(
-  map: Map<string, AggregatedTransaction>,
-  node: RecentTransactionsQuery$data['sent']['edges'][number]['node'],
-  direction: 'SENT' | 'RECEIVED',
-) {
-  const existing = map.get(node.id)
-  if (existing) {
-    existing.directions.add(direction)
-    return
-  }
-  map.set(node.id, {
-    id: node.id,
-    amount: String(node.amount),
-    currency: node.currency,
-    description: node.description,
-    createdAt: String(node.createdAt),
-    directions: new Set([direction]),
-  })
+interface RecentTransactionsErrorBoundaryState {
+  hasError: boolean
 }
 
-function resolveType(directions: Set<'SENT' | 'RECEIVED'>): TransactionType {
-  if (directions.has('SENT') && directions.has('RECEIVED')) {
-    return 'TRANSFER'
+class RecentTransactionsErrorBoundary extends Component<
+  RecentTransactionsErrorBoundaryProps,
+  RecentTransactionsErrorBoundaryState
+> {
+  state: RecentTransactionsErrorBoundaryState = {
+    hasError: false,
   }
-  return directions.has('RECEIVED') ? 'RECEIVED' : 'SENT'
+
+  static getDerivedStateFromError(): RecentTransactionsErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidUpdate(prevProps: Readonly<RecentTransactionsErrorBoundaryProps>) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false })
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <RecentTransactionsCard transactions={[]} hasError />
+    }
+    return this.props.children
+  }
+}
+
+function transactionTypeLabel(type: TransactionType): string {
+  if (type === 'RECEIVED') {
+    return 'Received'
+  }
+  if (type === 'SENT') {
+    return 'Sent'
+  }
+  return 'Transfer'
 }
 
 export function RecentTransactions({ accountIds, refreshKey }: RecentTransactionsProps) {
-  const environment = useRelayEnvironment()
-  const [transactions, setTransactions] = useState<RecentTransactionRow[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [hasError, setHasError] = useState(false)
-  const accountIdsKey = useMemo(
-    () => [...new Set(accountIds)].sort().join(','),
+  const uniqueAccountIds = useMemo(
+    () => [...new Set(accountIds)].filter((id) => id.trim().length > 0),
     [accountIds],
   )
+  if (uniqueAccountIds.length === 0) {
+    return <RecentTransactionsCard transactions={[]} />
+  }
 
-  useEffect(() => {
-    const uniqueAccountIds = accountIdsKey.length === 0 ? [] : accountIdsKey.split(',')
-    if (uniqueAccountIds.length === 0) {
-      setTransactions([])
-      setHasError(false)
-      setIsLoading(false)
-      return
-    }
+  const accountIdsKey = uniqueAccountIds.join(',')
+  const fetchKey = `${refreshKey}-${accountIdsKey}`
+  return (
+    <RecentTransactionsErrorBoundary resetKey={fetchKey}>
+      <RecentTransactionsQueryContent
+        accountIds={uniqueAccountIds}
+        fetchKey={fetchKey}
+      />
+    </RecentTransactionsErrorBoundary>
+  )
+}
 
-    let cancelled = false
-    setIsLoading(true)
-    setHasError(false)
+function RecentTransactionsQueryContent({
+  accountIds,
+  fetchKey,
+}: {
+  accountIds: string[]
+  fetchKey: string
+}) {
 
-    Promise.all(
-      uniqueAccountIds.map((accountId) =>
-        fetchQuery<RecentTransactionsQueryType>(
-          environment,
-          RecentTransactionsQuery,
-          { accountId },
-        ).toPromise(),
-      ),
-    )
-      .then((results) => {
-        if (cancelled) return
-        const map = new Map<string, AggregatedTransaction>()
+  const data = useLazyLoadQuery<RecentTransactionsQueryType>(
+    RecentTransactionsQuery,
+    {
+      accountIds,
+      first: 10,
+    },
+    {
+      fetchPolicy: 'store-and-network',
+      fetchKey,
+    },
+  )
 
-        results.forEach((result) => {
-          if (!result) return
-          result.sent.edges.forEach((edge) => upsertTransaction(map, edge.node, 'SENT'))
-          result.received.edges.forEach((edge) => upsertTransaction(map, edge.node, 'RECEIVED'))
-        })
+  const transactions = useMemo<RecentTransactionRow[]>(
+    () =>
+      data.recentTransactions.map((item) => ({
+        id: item.transaction.id,
+        amount: String(item.transaction.amount),
+        description: item.transaction.description,
+        createdAt: String(item.transaction.createdAt),
+        type: item.type as TransactionType,
+      })),
+    [data],
+  )
 
-        const merged = Array.from(map.values())
-          .map<RecentTransactionRow>((item) => ({
-            id: item.id,
-            amount: item.amount,
-            currency: item.currency,
-            description: item.description,
-            createdAt: item.createdAt,
-            type: resolveType(item.directions),
-          }))
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 10)
+  return <RecentTransactionsCard transactions={transactions} />
+}
 
-        setTransactions(merged)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setHasError(true)
-          setTransactions([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [environment, accountIdsKey, refreshKey])
+function RecentTransactionsCard({
+  transactions,
+  hasError = false,
+}: {
+  transactions: RecentTransactionRow[]
+  hasError?: boolean
+}) {
 
   return (
     <Card>
@@ -149,18 +144,15 @@ export function RecentTransactions({ accountIds, refreshKey }: RecentTransaction
         <CardTitle className="text-lg">Recent Transactions</CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading && <RecentTransactionsSkeleton />}
-        {!isLoading && hasError && (
+        {hasError ? (
           <p className="py-4 text-center text-sm text-destructive">
             Could not load recent transactions.
           </p>
-        )}
-        {!isLoading && !hasError && transactions.length === 0 ? (
+        ) : transactions.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
             No transactions yet
           </p>
-        ) : null}
-        {!isLoading && !hasError && transactions.length > 0 ? (
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -189,43 +181,27 @@ export function RecentTransactions({ accountIds, refreshKey }: RecentTransaction
                             : 'secondary'
                       }
                     >
-                      {tx.type === 'RECEIVED'
-                        ? 'Received'
-                        : tx.type === 'SENT'
-                          ? 'Sent'
-                          : 'Transfer'}
+                      {transactionTypeLabel(tx.type)}
                     </Badge>
                   </TableCell>
-                  <TableCell className={`text-center text-sm font-medium ${
-                    tx.type === 'RECEIVED'
-                      ? 'text-green-600'
-                      : tx.type === 'SENT'
-                        ? 'text-red-600'
-                        : 'text-muted-foreground'
-                  }`}>
-                    {tx.type === 'RECEIVED'
-                      ? '+'
-                      : tx.type === 'SENT'
-                        ? '-'
-                        : ''}
+                  <TableCell
+                    className={`text-center text-sm font-medium ${
+                      tx.type === 'RECEIVED'
+                        ? 'text-green-600'
+                        : tx.type === 'SENT'
+                          ? 'text-red-600'
+                          : 'text-muted-foreground'
+                    }`}
+                  >
+                    {tx.type === 'RECEIVED' ? '+' : tx.type === 'SENT' ? '-' : ''}
                     {formatCurrency(tx.amount)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        ) : null}
+        )}
       </CardContent>
     </Card>
-  )
-}
-
-function RecentTransactionsSkeleton() {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-10 w-full" />
-      ))}
-    </div>
   )
 }

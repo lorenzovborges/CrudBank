@@ -25,10 +25,14 @@ public class IdempotencyRecordDocument {
 
     private String responsePayload;
 
+    private IdempotencyRecordStatus status;
+
     @Indexed(expireAfter = "0s")
     private Instant expiresAt;
 
     private Instant createdAt;
+
+    private Instant updatedAt;
 
     public String getId() {
         return id;
@@ -70,6 +74,14 @@ public class IdempotencyRecordDocument {
         this.responsePayload = responsePayload;
     }
 
+    public IdempotencyRecordStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(IdempotencyRecordStatus status) {
+        this.status = status;
+    }
+
     public Instant getExpiresAt() {
         return expiresAt;
     }
@@ -84,5 +96,13 @@ public class IdempotencyRecordDocument {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

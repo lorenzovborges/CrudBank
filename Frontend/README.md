@@ -1,73 +1,104 @@
-# React + TypeScript + Vite
+# CrudBank Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend for the Crud Bank challenge built with React + Vite + Relay + React Router + shadcn/ui.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React 19 + TypeScript
+- Vite 7
+- React Router 7
+- Relay (`react-relay`, `relay-runtime`, `relay-compiler`)
+- shadcn/ui + Tailwind CSS
+- ESLint
+- Vitest + Testing Library
 
-## React Compiler
+## Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 20+ (recommended)
+- Backend GraphQL API running (default: `http://localhost:8080/graphql`)
 
-## Expanding the ESLint configuration
+## Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd Frontend
+cp .env.example .env
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Environment variable:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `VITE_GRAPHQL_URL` (default fallback in code: `http://localhost:8080/graphql`)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Run
+
+Development server:
+
+```bash
+cd Frontend
+npm run dev
+```
+
+Production preview:
+
+```bash
+cd Frontend
+npm run build
+npm run preview
+```
+
+## Scripts
+
+- `npm run dev` - Vite dev server
+- `npm run relay` - generate Relay artifacts once
+- `npm run relay:watch` - watch mode for Relay artifacts
+- `npm run lint` - ESLint
+- `npm run test` - Vitest
+- `npm run test:watch` - Vitest watch mode
+- `npm run build` - Relay compile + TypeScript build + Vite build
+
+## Relay Workflow
+
+1. Keep frontend schema in `Frontend/schema.graphql` aligned with backend.
+2. Run `npm run relay` (or `npm run build`) after GraphQL changes.
+3. Relay artifacts are generated under `Frontend/src/graphql/__generated__`.
+
+Current dashboard recent transactions use one query:
+
+- `recentTransactions(accountIds, first)` (single backend call, no account fan-out).
+
+## Money Handling
+
+Money calculations in UI use integer cents to avoid floating-point drift:
+
+- `Frontend/src/lib/money.ts`
+- totals on dashboard are computed in cents and only formatted to BRL at render.
+
+## Testing
+
+Validation and utility tests:
+
+- `tests/validation-account.test.ts`
+- `tests/validation-transfer.test.ts`
+- `tests/validation-document.test.ts`
+- `tests/graphql-errors.test.ts`
+- `tests/money.test.ts`
+
+Critical UI flow test:
+
+- `tests/transfer-dialog.test.tsx`
+
+Run all tests:
+
+```bash
+cd Frontend
+npm run test
+```
+
+## Final Validation Commands
+
+```bash
+cd Frontend
+npm run lint
+npm run test
+npm run build
 ```

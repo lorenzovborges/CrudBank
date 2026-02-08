@@ -15,6 +15,12 @@ enum TransactionDirection {
   RECEIVED
 }
 
+enum RecentTransactionType {
+  SENT
+  RECEIVED
+  TRANSFER
+}
+
 type Account implements Node {
   id: ID!
   ownerName: String!
@@ -75,6 +81,11 @@ type TransferFundsPayload {
   processedAt: DateTime!
 }
 
+type RecentTransaction {
+  transaction: Transaction!
+  type: RecentTransactionType!
+}
+
 input CreateAccountInput {
   ownerName: String!
   document: String!
@@ -107,6 +118,7 @@ type Query {
   accounts(first: Int!, after: String, status: AccountStatus): AccountConnection!
   transaction(id: ID!): Transaction
   transactionsByAccount(accountId: ID!, direction: TransactionDirection!, first: Int!, after: String): TransactionConnection!
+  recentTransactions(accountIds: [ID!]!, first: Int!): [RecentTransaction!]!
   availableBalance(accountId: ID!): BigDecimal!
 }
 

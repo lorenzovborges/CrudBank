@@ -152,6 +152,7 @@ export function AccountsTable({
       )}
 
       <EditAccountDialog
+        key={editAccount?.id ?? 'empty-account'}
         open={!!editAccount}
         onOpenChange={(open) => !open && setEditAccount(null)}
         account={editAccount}

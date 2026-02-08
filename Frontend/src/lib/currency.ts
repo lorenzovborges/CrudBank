@@ -1,9 +1,6 @@
-const formatter = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-})
+import { formatCents, tryToCents } from '@/lib/money'
 
 export function formatCurrency(value: string | number): string {
-  const num = typeof value === 'string' ? parseFloat(value) : value
-  return formatter.format(num)
+  const cents = tryToCents(value)
+  return formatCents(cents ?? 0)
 }

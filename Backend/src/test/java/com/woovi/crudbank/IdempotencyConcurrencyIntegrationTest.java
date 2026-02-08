@@ -4,6 +4,8 @@ import com.woovi.crudbank.account.domain.AccountDocument;
 import com.woovi.crudbank.account.domain.AccountStatus;
 import com.woovi.crudbank.account.domain.CurrencyCode;
 import com.woovi.crudbank.account.infrastructure.AccountRepository;
+import com.woovi.crudbank.shared.error.DomainException;
+import com.woovi.crudbank.shared.error.ErrorCode;
 import com.woovi.crudbank.shared.relay.GlobalIdCodec;
 import com.woovi.crudbank.transaction.api.TransferFundsPayloadView;
 import com.woovi.crudbank.transaction.application.TransactionService;
@@ -88,20 +90,32 @@ class IdempotencyConcurrencyIntegrationTest extends AbstractGraphqlIntegrationTe
         }
         executor.shutdownNow();
 
-        long errors = outcomes.stream().filter(Throwable.class::isInstance).count();
-        assertThat(errors).isZero();
+        long transientConflicts = outcomes.stream()
+            .filter(DomainException.class::isInstance)
+            .map(DomainException.class::cast)
+            .filter(exception -> exception.getCode() == ErrorCode.CONFLICT)
+            .count();
+
+        long unexpectedErrors = outcomes.stream()
+            .filter(Throwable.class::isInstance)
+            .filter(outcome -> !(outcome instanceof DomainException domainException
+                && domainException.getCode() == ErrorCode.CONFLICT))
+            .count();
+        assertThat(unexpectedErrors).isZero();
 
         long replays = outcomes.stream()
+            .filter(TransferFundsPayloadView.class::isInstance)
             .map(TransferFundsPayloadView.class::cast)
             .filter(TransferFundsPayloadView::idempotentReplay)
             .count();
         long freshExecutions = outcomes.stream()
+            .filter(TransferFundsPayloadView.class::isInstance)
             .map(TransferFundsPayloadView.class::cast)
             .filter(payload -> !payload.idempotentReplay())
             .count();
 
         assertThat(freshExecutions).isEqualTo(1);
-        assertThat(replays).isEqualTo(threads - 1L);
+        assertThat(replays + transientConflicts).isEqualTo(threads - 1L);
         assertThat(transactionRepository.count()).isEqualTo(1);
         assertThat(idempotencyRecordRepository.count()).isEqualTo(1);
     }

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<8b93e3815bf472ce373041a5780eac39>>
+ * @generated SignedSource<<7487740d7399348b3acbf2f231b56166>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -9,36 +9,24 @@
 // @ts-nocheck
 
 import { ConcreteRequest } from 'relay-runtime';
+export type RecentTransactionType = "RECEIVED" | "SENT" | "TRANSFER" | "%future added value";
 export type RecentTransactionsQuery$variables = {
-  accountId: string;
+  accountIds: ReadonlyArray<string>;
+  first: number;
 };
 export type RecentTransactionsQuery$data = {
-  readonly received: {
-    readonly edges: ReadonlyArray<{
-      readonly node: {
-        readonly amount: any;
-        readonly createdAt: any;
-        readonly currency: string;
-        readonly description: string;
-        readonly fromAccountId: string;
-        readonly id: string;
-        readonly toAccountId: string;
-      };
-    }>;
-  };
-  readonly sent: {
-    readonly edges: ReadonlyArray<{
-      readonly node: {
-        readonly amount: any;
-        readonly createdAt: any;
-        readonly currency: string;
-        readonly description: string;
-        readonly fromAccountId: string;
-        readonly id: string;
-        readonly toAccountId: string;
-      };
-    }>;
-  };
+  readonly recentTransactions: ReadonlyArray<{
+    readonly transaction: {
+      readonly amount: any;
+      readonly createdAt: any;
+      readonly currency: string;
+      readonly description: string;
+      readonly fromAccountId: string;
+      readonly id: string;
+      readonly toAccountId: string;
+    };
+    readonly type: RecentTransactionType;
+  }>;
 };
 export type RecentTransactionsQuery = {
   response: RecentTransactionsQuery$data;
@@ -50,34 +38,47 @@ var v0 = [
   {
     "defaultValue": null,
     "kind": "LocalArgument",
-    "name": "accountId"
+    "name": "accountIds"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "first"
   }
 ],
-v1 = {
-  "kind": "Variable",
-  "name": "accountId",
-  "variableName": "accountId"
-},
-v2 = {
-  "kind": "Literal",
-  "name": "first",
-  "value": 10
-},
-v3 = [
+v1 = [
   {
     "alias": null,
-    "args": null,
-    "concreteType": "TransactionEdge",
+    "args": [
+      {
+        "kind": "Variable",
+        "name": "accountIds",
+        "variableName": "accountIds"
+      },
+      {
+        "kind": "Variable",
+        "name": "first",
+        "variableName": "first"
+      }
+    ],
+    "concreteType": "RecentTransaction",
     "kind": "LinkedField",
-    "name": "edges",
+    "name": "recentTransactions",
     "plural": true,
     "selections": [
       {
         "alias": null,
         "args": null,
+        "kind": "ScalarField",
+        "name": "type",
+        "storageKey": null
+      },
+      {
+        "alias": null,
+        "args": null,
         "concreteType": "Transaction",
         "kind": "LinkedField",
-        "name": "node",
+        "name": "transaction",
         "plural": false,
         "selections": [
           {
@@ -135,44 +136,6 @@ v3 = [
     ],
     "storageKey": null
   }
-],
-v4 = [
-  {
-    "alias": "sent",
-    "args": [
-      (v1/*: any*/),
-      {
-        "kind": "Literal",
-        "name": "direction",
-        "value": "SENT"
-      },
-      (v2/*: any*/)
-    ],
-    "concreteType": "TransactionConnection",
-    "kind": "LinkedField",
-    "name": "transactionsByAccount",
-    "plural": false,
-    "selections": (v3/*: any*/),
-    "storageKey": null
-  },
-  {
-    "alias": "received",
-    "args": [
-      (v1/*: any*/),
-      {
-        "kind": "Literal",
-        "name": "direction",
-        "value": "RECEIVED"
-      },
-      (v2/*: any*/)
-    ],
-    "concreteType": "TransactionConnection",
-    "kind": "LinkedField",
-    "name": "transactionsByAccount",
-    "plural": false,
-    "selections": (v3/*: any*/),
-    "storageKey": null
-  }
 ];
 return {
   "fragment": {
@@ -180,7 +143,7 @@ return {
     "kind": "Fragment",
     "metadata": null,
     "name": "RecentTransactionsQuery",
-    "selections": (v4/*: any*/),
+    "selections": (v1/*: any*/),
     "type": "Query",
     "abstractKey": null
   },
@@ -189,19 +152,19 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
     "name": "RecentTransactionsQuery",
-    "selections": (v4/*: any*/)
+    "selections": (v1/*: any*/)
   },
   "params": {
-    "cacheID": "e5196bda46e28f9dd29826ad0cb34d1f",
+    "cacheID": "2702d6e548b115e26eb06b230c7f8ddd",
     "id": null,
     "metadata": {},
     "name": "RecentTransactionsQuery",
     "operationKind": "query",
-    "text": "query RecentTransactionsQuery(\n  $accountId: ID!\n) {\n  sent: transactionsByAccount(accountId: $accountId, direction: SENT, first: 10) {\n    edges {\n      node {\n        id\n        fromAccountId\n        toAccountId\n        amount\n        currency\n        description\n        createdAt\n      }\n    }\n  }\n  received: transactionsByAccount(accountId: $accountId, direction: RECEIVED, first: 10) {\n    edges {\n      node {\n        id\n        fromAccountId\n        toAccountId\n        amount\n        currency\n        description\n        createdAt\n      }\n    }\n  }\n}\n"
+    "text": "query RecentTransactionsQuery(\n  $accountIds: [ID!]!\n  $first: Int!\n) {\n  recentTransactions(accountIds: $accountIds, first: $first) {\n    type\n    transaction {\n      id\n      fromAccountId\n      toAccountId\n      amount\n      currency\n      description\n      createdAt\n    }\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "790de82acf6f15b1936d76ecf012b3d5";
+(node as any).hash = "3895c8c5c388b5c81e5b60a25f480b42";
 
 export default node;

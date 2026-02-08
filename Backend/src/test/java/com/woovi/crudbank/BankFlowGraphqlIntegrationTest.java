@@ -331,4 +331,73 @@ class BankFlowGraphqlIntegrationTest extends AbstractGraphqlIntegrationTest {
             .path("transactionsByAccount.edges[0].node.fromAccountId").entity(String.class).isEqualTo(accountA)
             .path("transactionsByAccount.edges[0].node.toAccountId").entity(String.class).isEqualTo(accountB);
     }
+
+    @Test
+    void shouldListRecentTransactionsForAccountSet() {
+        String accountA = createAccount("Alice", "52998224725", "0001", "13131-1", "1000.00");
+        String accountB = createAccount("Bob", "02306078106", "0001", "35353-3", "1000.00");
+
+        String transferMutation = """
+            mutation Transfer($input: TransferFundsInput!) {
+              transferFunds(input: $input) {
+                transaction { id }
+              }
+            }
+            """;
+
+        graphQlTester
+            .document(transferMutation)
+            .variable("input", Map.of(
+                "fromAccountId", accountA,
+                "toAccountId", accountB,
+                "amount", "10.00",
+                "description", "Recent tx",
+                "idempotencyKey", "idem-flow-recent-1"
+            ))
+            .execute();
+
+        String recentQuery = """
+            query Recent($accountIds: [ID!]!, $first: Int!) {
+              recentTransactions(accountIds: $accountIds, first: $first) {
+                type
+                transaction {
+                  fromAccountId
+                  toAccountId
+                }
+              }
+            }
+            """;
+
+        graphQlTester
+            .document(recentQuery)
+            .variable("accountIds", java.util.List.of(accountA, accountB))
+            .variable("first", 10)
+            .execute()
+            .path("recentTransactions[0].type").entity(String.class).isEqualTo("TRANSFER")
+            .path("recentTransactions[0].transaction.fromAccountId").entity(String.class).isEqualTo(accountA)
+            .path("recentTransactions[0].transaction.toAccountId").entity(String.class).isEqualTo(accountB);
+    }
+
+    @Test
+    void shouldReturnEmptyRecentTransactionsWhenAccountIdsIsEmpty() {
+        String recentQuery = """
+            query Recent($accountIds: [ID!]!, $first: Int!) {
+              recentTransactions(accountIds: $accountIds, first: $first) {
+                type
+                transaction {
+                  id
+                }
+              }
+            }
+            """;
+
+        graphQlTester
+            .document(recentQuery)
+            .variable("accountIds", java.util.List.of())
+            .variable("first", 10)
+            .execute()
+            .path("recentTransactions")
+            .entityList(Object.class)
+            .hasSize(0);
+    }
 }

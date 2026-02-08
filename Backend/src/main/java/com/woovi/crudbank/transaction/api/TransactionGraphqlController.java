@@ -15,6 +15,7 @@ import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Controller
 public class TransactionGraphqlController {
@@ -49,6 +50,14 @@ public class TransactionGraphqlController {
         @Argument String after
     ) {
         return transactionService.listTransactionsByAccount(accountId, direction, first, after);
+    }
+
+    @QueryMapping
+    public List<RecentTransactionView> recentTransactions(
+        @Argument @NotNull List<@NotBlank String> accountIds,
+        @Argument Integer first
+    ) {
+        return transactionService.listRecentTransactions(accountIds, first);
     }
 
     public record TransferFundsInput(
