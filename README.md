@@ -1,91 +1,80 @@
-# CrudBank - Woovi Challenge (GraphQL Relay)
+# CrudBank
 
-This repository is a fullstack implementation of the **Woovi Challenge - Crud Bank GraphQL Relay**.
+CrudBank is a fullstack banking CRUD application with a GraphQL API and a Relay-based frontend.
 
-It delivers a bank-like flow where users can:
+It covers the core banking flows:
 
 - Create and manage accounts
-- Send and receive transactions
-- Check available balance
+- Send and receive transfers between accounts
+- Calculate and query available balance
 - Browse accounts and transactions with Relay-style pagination
 
-The project is open source and organized as a single backend + frontend solution:
-
-- Backend: `backend`
-- Frontend: `frontend`
-
-## Challenge Context
-
-Woovi challenge summary:
-
-- Theme: Bank CRUD
-- Backend stack: **Node.js, Koa, MongoDB, GraphQL**
-- Frontend stack: **React, Relay**
-- Testing: **Jest** (backend) and frontend test runner
-- Goal: reproduce startup-like day-to-day delivery, balancing code quality and business decisions
-
-Reference:
-
-- Woovi Stack: [https://dev.to/woovi/woovi-stack-5fom](https://dev.to/woovi/woovi-stack-5fom)
-
-## Requirement Coverage
+## Tech Stack
 
 ### Backend
 
-- GraphQL API implemented with `graphql-http`
-- MongoDB persistence with transaction support (replica set)
-- Account and Transaction collections
-- Transfer flow between two accounts
-- Available balance calculation
-- Relay `Node` interface and connection pagination
-- GraphiQL endpoint exposed
-- Postman collection included
-- Automated tests with Jest
-
-### Frontend
-
-- React + Vite + React Router
-- Relay integration with generated artifacts
-- shadcn/ui components
-- Account creation and transfer actions
-- Dashboard and transaction visualization
-- Frontend tests included
-
-## Architecture Overview
-
-### Backend
-
-- Runtime: Node.js 20+ with TypeScript strict mode
-- HTTP server: Koa
-- GraphQL endpoints: `/graphql`, `/graphiql`, `/health`
-- Data consistency: MongoDB transactions for transfers, idempotency keys, per-account leaky-bucket rate limiting, and monetary precision with `decimal.js`
+- Node.js 20+
+- TypeScript (strict)
+- Koa
+- GraphQL (`graphql-http`)
+- MongoDB (replica set for transactions)
+- Jest + Supertest + mongodb-memory-server
 
 ### Frontend
 
 - React 19 + TypeScript
-- Vite build/dev server
-- Relay + GraphQL operations
-- React Router navigation
-- UI built with shadcn + Tailwind
+- Vite
+- React Router
+- Relay (`react-relay`, `relay-runtime`, `relay-compiler`)
+- shadcn/ui + Tailwind
+- Vitest + Testing Library
 
-## GraphQL Contract
+## Core Functionality
 
-Main types and operations (from `backend/src/graphql/schema.graphqls`):
+### Accounts
 
-- Types: `Account`, `Transaction`, `TransferFundsPayload`, `RecentTransaction`
-- Relay: `Node`, `AccountConnection`, `TransactionConnection`, `PageInfo`
-- Queries: `node`, `account`, `accounts`, `transaction`, `transactionsByAccount`, `recentTransactions`, `availableBalance`
-- Mutations: `createAccount`, `updateAccount`, `deactivateAccount`, `transferFunds`
+- Create account (`createAccount`)
+- Update account (`updateAccount`)
+- Deactivate account (`deactivateAccount`)
+- List accounts with Relay connection (`accounts`)
 
-Default backend URLs:
+### Transactions
+
+- Transfer funds (`transferFunds`)
+- List transactions by account and direction (`transactionsByAccount`)
+- Recent transactions by account set (`recentTransactions`)
+
+### Balances
+
+- Available balance query (`availableBalance`)
+
+### Reliability and Consistency
+
+- MongoDB transactions for transfer integrity
+- Idempotency key support for transfer safety
+- Per-account leaky-bucket rate limiting
+- Decimal-safe money handling with `decimal.js`
+
+## API Endpoints
+
+Default backend endpoints:
 
 - GraphQL: `http://localhost:8080/graphql`
 - GraphiQL: `http://localhost:8080/graphiql`
 - Health: `http://localhost:8080/health`
 
-Frontend must point to:
+Frontend GraphQL target:
 
 - `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
+
+## GraphQL Contract Overview
+
+Main schema elements (from `backend/src/graphql/schema.graphqls`):
+
+- Types: `Account`, `Transaction`, `TransferFundsPayload`, `RecentTransaction`
+- Relay support: `Node`, `AccountConnection`, `TransactionConnection`, `PageInfo`
+- Queries: `node`, `account`, `accounts`, `transaction`, `transactionsByAccount`, `recentTransactions`, `availableBalance`
+- Mutations: `createAccount`, `updateAccount`, `deactivateAccount`, `transferFunds`
 
 ## Repository Structure
 
@@ -108,11 +97,11 @@ crudbank
 
 - Node.js 20+
 - npm
-- Docker + Docker Compose (optional, recommended for backend MongoDB setup)
+- Docker + Docker Compose (optional but recommended for backend MongoDB setup)
 
-## Local Setup and Run
+## Running Locally
 
-### 1) Backend (local)
+### 1) Start backend
 
 ```bash
 cd backend
@@ -121,7 +110,7 @@ npm ci
 npm run dev
 ```
 
-### 2) Frontend (local)
+### 2) Start frontend
 
 ```bash
 cd frontend
@@ -130,7 +119,7 @@ npm install
 npm run dev
 ```
 
-## Backend with Docker
+## Running Backend with Docker
 
 ### Default ports
 
@@ -142,14 +131,14 @@ docker compose up --build -d
 
 ### Custom host ports
 
-Useful when host `27017` is already in use:
+If `27017` is already in use:
 
 ```bash
 cd backend
 APP_PORT=18080 MONGO_PORT=37017 docker compose up --build -d
 ```
 
-Then backend is available at:
+Backend will be available at:
 
 - `http://localhost:18080/graphql`
 - `http://localhost:18080/graphiql`
@@ -175,7 +164,7 @@ Then backend is available at:
 
 - `VITE_GRAPHQL_URL=http://localhost:8080/graphql`
 
-## Testing and Quality
+## Testing and Quality Gates
 
 ### Backend
 
@@ -198,13 +187,13 @@ npm run test
 npm run build
 ```
 
-## API Testing with Postman
+## Postman
 
-Import:
+Import collection:
 
 - `backend/postman/CrudBankGraphQL.postman_collection.json`
 
-Suggested flow:
+Suggested API flow:
 
 1. Create Account A
 2. Create Account B
@@ -212,16 +201,8 @@ Suggested flow:
 4. Query `availableBalance`
 5. Query `accounts` and `transactionsByAccount`
 
-## Deployment Notes
+## Deployment Checklist
 
-- Backend must be reachable for review (challenge requirement).
-- Frontend must be deployed in production for review (challenge requirement).
-- This repository is open source as required by the challenge.
-
-## Extra Challenge Notes
-
-From the original challenge:
-
-- Better backend chances: GraphQL playground, Postman collection, `graphql-http`, tests
-- Better frontend chances: shadcn, latest Vite + Router, Storybook, dashboard quality, tests
-- Senior scope (optional): subject-based architecture and Woovi Leaky Bucket design
+- Backend deployed and reachable
+- Frontend deployed and pointing to the backend GraphQL URL
+- Lint, build and tests passing before release

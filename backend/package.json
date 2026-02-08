@@ -2,7 +2,7 @@
   "name": "crudbank-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Woovi Challenge - Crud Bank GraphQL Relay backend in Node.js/Koa",
+  "description": "CrudBank GraphQL Relay backend in Node.js/Koa",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
